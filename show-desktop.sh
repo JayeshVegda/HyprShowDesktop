@@ -1,11 +1,12 @@
 #!/usr/bin/env sh
 #
-# Hyprland Show Desktop Script
+# Hyprland Show Desktop Script (Advanced Version)
 # Toggles showing/hiding all windows on the current workspace
 # State is remembered per workspace
+# ADVANCED: Preserves exact window positions, sizes, and floating states
 #
-# Usage: ./show-desktop.sh
-# Bind to a key in hyprland.conf: bind = $mainMod, D, exec, ~/.config/hypr/hyprland-show-desktop/show-desktop.sh
+# Usage: ./show-desktop-advanced.sh
+# Bind to a key in hyprland.conf: bind = $mainMod, D, exec, ~/.config/hypr/hyprland-show-desktop/show-desktop-advanced.sh
 
 set -e
 
@@ -36,7 +37,7 @@ if [ ! -d "$TMP_DIR" ] || [ ! -w "$TMP_DIR" ]; then
     error_exit "Cannot write to temporary directory: $TMP_DIR"
 fi
 
-TMP_FILE="$TMP_DIR/hyprland-show-desktop"
+TMP_FILE="$TMP_DIR/hyprland-show-desktop-advanced"
 
 # Get current workspace name with error handling
 MONITORS_JSON=$(hyprctl monitors -j 2>/dev/null)
@@ -54,30 +55,85 @@ WORKSPACE_STATE_FILE="$TMP_FILE-$CURRENT_WORKSPACE"
 
 # Check if windows are hidden (file exists and has content)
 if [ -s "$WORKSPACE_STATE_FILE" ]; then
-    # Restore windows: read addresses from file and move them back
+    # Restore windows: read window data from JSON file and restore
     if [ ! -r "$WORKSPACE_STATE_FILE" ]; then
         error_exit "Cannot read state file: $WORKSPACE_STATE_FILE"
     fi
     
-    # Process addresses and build commands
-    CMDS=""
-    RESTORED_COUNT=0
+    # Read JSON state file
+    WINDOW_STATE_JSON=$(cat "$WORKSPACE_STATE_FILE" 2>/dev/null)
+    if [ $? -ne 0 ] || [ -z "$WINDOW_STATE_JSON" ]; then
+        error_exit "Failed to read state file: $WORKSPACE_STATE_FILE"
+    fi
     
-    while IFS= read -r address || [ -n "$address" ]; do
-        address=$(echo "$address" | tr -d '[:space:]')
-        if [ -n "$address" ] && [ "$address" != "" ]; then
-            CMDS="${CMDS}dispatch movetoworkspacesilent name:$CURRENT_WORKSPACE,address:$address;"
-            RESTORED_COUNT=$((RESTORED_COUNT + 1))
-        fi
-    done < "$WORKSPACE_STATE_FILE"
+    # Validate JSON
+    if ! echo "$WINDOW_STATE_JSON" | jq empty 2>/dev/null; then
+        error_exit "Invalid JSON in state file: $WORKSPACE_STATE_FILE"
+    fi
     
-    if [ -n "$CMDS" ] && [ "$RESTORED_COUNT" -gt 0 ]; then
-        # Execute restore commands
-        if ! hyprctl --batch "$CMDS" >/dev/null 2>&1; then
-            # If restore fails, clean up state file to prevent stuck state
-            rm -f "$WORKSPACE_STATE_FILE"
-            error_exit "Failed to restore windows. State file has been cleared."
+    # Create temp file for commands
+    TEMP_CMDS_FILE="$TMP_DIR/hyprland-restore-cmds-$$"
+    rm -f "$TEMP_CMDS_FILE"
+    
+    # Process each window in the state file
+    WINDOW_COUNT=$(echo "$WINDOW_STATE_JSON" | jq '. | length' 2>/dev/null)
+    if [ -z "$WINDOW_COUNT" ] || [ "$WINDOW_COUNT" = "0" ] || [ "$WINDOW_COUNT" = "null" ]; then
+        rm -f "$WORKSPACE_STATE_FILE"
+        exit 0
+    fi
+    
+    # Build restore commands for each window
+    echo "$WINDOW_STATE_JSON" | jq -c '.[]' 2>/dev/null | while IFS= read -r window_data || [ -n "$window_data" ]; do
+        if [ -z "$window_data" ] || [ "$window_data" = "null" ]; then
+            continue
         fi
+        
+        # Extract window properties
+        address=$(echo "$window_data" | jq -r '.address' 2>/dev/null)
+        is_floating=$(echo "$window_data" | jq -r '.floating' 2>/dev/null)
+        at_x=$(echo "$window_data" | jq -r '.at[0]' 2>/dev/null)
+        at_y=$(echo "$window_data" | jq -r '.at[1]' 2>/dev/null)
+        size_w=$(echo "$window_data" | jq -r '.size[0]' 2>/dev/null)
+        size_h=$(echo "$window_data" | jq -r '.size[1]' 2>/dev/null)
+        
+        if [ -z "$address" ] || [ "$address" = "null" ] || [ "$address" = "" ]; then
+            continue
+        fi
+        
+        # Append commands to temp file
+        echo "dispatch movetoworkspacesilent name:$CURRENT_WORKSPACE,address:$address;" >> "$TEMP_CMDS_FILE"
+        
+        # If floating, restore position and size
+        if [ "$is_floating" = "true" ] || [ "$is_floating" = "1" ]; then
+            echo "dispatch setfloating address:$address;" >> "$TEMP_CMDS_FILE"
+            
+            # Restore position and size (only if valid numbers)
+            if [ -n "$at_x" ] && [ "$at_x" != "null" ] && [ -n "$at_y" ] && [ "$at_y" != "null" ] && \
+               [ -n "$size_w" ] && [ "$size_w" != "null" ] && [ -n "$size_h" ] && [ "$size_h" != "null" ]; then
+                # Validate they are numbers (including negative for position)
+                if echo "$at_x" | grep -qE '^-?[0-9]+$' && echo "$at_y" | grep -qE '^-?[0-9]+$' && \
+                   echo "$size_w" | grep -qE '^[0-9]+$' && echo "$size_h" | grep -qE '^[0-9]+$'; then
+                    echo "dispatch movewindowpixel exact $at_x $at_y,address:$address;" >> "$TEMP_CMDS_FILE"
+                    echo "dispatch resizewindowpixel exact $size_w $size_h,address:$address;" >> "$TEMP_CMDS_FILE"
+                fi
+            fi
+        else
+            # Ensure window is tiled (not floating)
+            echo "dispatch settiled address:$address;" >> "$TEMP_CMDS_FILE"
+        fi
+    done
+    
+    # Execute all restore commands at once
+    if [ -f "$TEMP_CMDS_FILE" ] && [ -s "$TEMP_CMDS_FILE" ]; then
+        CMDS=$(cat "$TEMP_CMDS_FILE" | tr '\n' ' ')
+        if [ -n "$CMDS" ]; then
+            if ! hyprctl --batch "$CMDS" >/dev/null 2>&1; then
+                rm -f "$TEMP_CMDS_FILE"
+                rm -f "$WORKSPACE_STATE_FILE"
+                error_exit "Failed to restore windows. State file has been cleared."
+            fi
+        fi
+        rm -f "$TEMP_CMDS_FILE"
     fi
     
     # Clean up state file after successful restore
@@ -85,33 +141,51 @@ if [ -s "$WORKSPACE_STATE_FILE" ]; then
         echo "Warning: Could not remove state file: $WORKSPACE_STATE_FILE" >&2
     fi
 else
-    # Hide windows: get all windows on current workspace and move to special workspace
+    # Hide windows: get all windows on current workspace and save their state
     CLIENTS_JSON=$(hyprctl clients -j 2>/dev/null)
     if [ $? -ne 0 ] || [ -z "$CLIENTS_JSON" ]; then
         error_exit "Failed to get client information from hyprctl."
     fi
     
-    HIDDEN_WINDOWS=$(echo "$CLIENTS_JSON" | jq -r --arg CW "$CURRENT_WORKSPACE" '.[] | select(.workspace.name == $CW) | .address' 2>/dev/null)
+    # Get windows on current workspace with their properties
+    WINDOWS_ON_WORKSPACE=$(echo "$CLIENTS_JSON" | jq --arg CW "$CURRENT_WORKSPACE" '.[] | select(.workspace.name == $CW) | {
+        address: .address,
+        floating: .floating,
+        at: .at,
+        size: .size
+    }' 2>/dev/null)
     
-    if [ -z "$HIDDEN_WINDOWS" ]; then
-        # No windows to hide - this is not an error, just exit silently
+    if [ -z "$WINDOWS_ON_WORKSPACE" ] || [ "$WINDOWS_ON_WORKSPACE" = "[]" ]; then
+        # No windows to hide
         exit 0
     fi
     
-    # Store addresses for restoration
-    TMP_ADDRESS=""
+    # Convert to array format
+    WINDOWS_ARRAY=$(echo "$WINDOWS_ON_WORKSPACE" | jq -s '.' 2>/dev/null)
+    
+    if [ -z "$WINDOWS_ARRAY" ] || [ "$WINDOWS_ARRAY" = "null" ]; then
+        error_exit "Failed to process window data."
+    fi
+    
+    # Extract addresses for moving to special workspace
+    WINDOW_ADDRESSES=$(echo "$WINDOWS_ARRAY" | jq -r '.[] | .address' 2>/dev/null)
+    
+    if [ -z "$WINDOW_ADDRESSES" ]; then
+        error_exit "No valid window addresses found."
+    fi
+    
+    # Build move commands
     CMDS=""
     HIDDEN_COUNT=0
     
     while IFS= read -r address || [ -n "$address" ]; do
         address=$(echo "$address" | tr -d '[:space:]')
         if [ -n "$address" ] && [ "$address" != "" ] && [ "$address" != "null" ]; then
-            TMP_ADDRESS="${TMP_ADDRESS}${address}\n"
             CMDS="${CMDS}dispatch movetoworkspacesilent special:desktop,address:$address;"
             HIDDEN_COUNT=$((HIDDEN_COUNT + 1))
         fi
     done <<EOF
-$HIDDEN_WINDOWS
+$WINDOW_ADDRESSES
 EOF
     
     if [ -n "$CMDS" ] && [ "$HIDDEN_COUNT" -gt 0 ]; then
@@ -120,23 +194,20 @@ EOF
             error_exit "Failed to hide windows. Make sure the special workspace 'desktop' is configured in your hyprland.conf"
         fi
         
-        # Save state for restoration
-        TMP_ADDRESS_CLEAN=$(echo -e "$TMP_ADDRESS" | sed -e '/^$/d')
-        if [ -n "$TMP_ADDRESS_CLEAN" ]; then
-            if ! echo -e "$TMP_ADDRESS_CLEAN" > "$WORKSPACE_STATE_FILE" 2>/dev/null; then
-                # If we can't save state, try to restore windows to prevent data loss
-                RESTORE_CMDS=""
-                while IFS= read -r addr || [ -n "$addr" ]; do
-                    addr=$(echo "$addr" | tr -d '[:space:]')
-                    if [ -n "$addr" ]; then
-                        RESTORE_CMDS="${RESTORE_CMDS}dispatch movetoworkspacesilent name:$CURRENT_WORKSPACE,address:$addr;"
-                    fi
-                done <<EOF
-$TMP_ADDRESS
+        # Save state for restoration (save as JSON)
+        if ! echo "$WINDOWS_ARRAY" > "$WORKSPACE_STATE_FILE" 2>/dev/null; then
+            # If we can't save state, try to restore windows
+            RESTORE_CMDS=""
+            while IFS= read -r addr || [ -n "$addr" ]; do
+                addr=$(echo "$addr" | tr -d '[:space:]')
+                if [ -n "$addr" ]; then
+                    RESTORE_CMDS="${RESTORE_CMDS}dispatch movetoworkspacesilent name:$CURRENT_WORKSPACE,address:$addr;"
+                fi
+            done <<EOF
+$WINDOW_ADDRESSES
 EOF
-                hyprctl --batch "$RESTORE_CMDS" >/dev/null 2>&1 || true
-                error_exit "Failed to save state file. Windows were not hidden to prevent data loss."
-            fi
+            hyprctl --batch "$RESTORE_CMDS" >/dev/null 2>&1 || true
+            error_exit "Failed to save state file. Windows were not hidden to prevent data loss."
         fi
     fi
 fi

@@ -105,7 +105,7 @@ if [ -s "$WORKSPACE_STATE_FILE" ]; then
         
         # If floating, restore position and size
         if [ "$is_floating" = "true" ] || [ "$is_floating" = "1" ]; then
-            echo "dispatch setfloating active,address:$address;" >> "$TEMP_CMDS_FILE"
+            echo "dispatch setfloating address:$address;" >> "$TEMP_CMDS_FILE"
             
             # Restore position and size (only if valid numbers)
             if [ -n "$at_x" ] && [ "$at_x" != "null" ] && [ -n "$at_y" ] && [ "$at_y" != "null" ] && \
@@ -119,7 +119,7 @@ if [ -s "$WORKSPACE_STATE_FILE" ]; then
             fi
         else
             # Ensure window is tiled (not floating)
-            echo "dispatch settiled active,address:$address;" >> "$TEMP_CMDS_FILE"
+            echo "dispatch settiled address:$address;" >> "$TEMP_CMDS_FILE"
         fi
     done
     
