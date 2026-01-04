@@ -45,10 +45,6 @@ bind = $mainMod, D, exec, ~/.config/hypr/hyprland-show-desktop/show-desktop.sh
 workspace = special:desktop, gapsout:0, gapsin:0, bordersize:0
 ```
 
-### Method 2: Using a Package Manager (AUR)
-
-*If you create an AUR package, add instructions here*
-
 ## Configuration
 
 ### Keybind
