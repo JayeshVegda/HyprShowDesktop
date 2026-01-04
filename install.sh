@@ -60,13 +60,9 @@ if [ ! -f "$SCRIPT_DIR/show-desktop.sh" ]; then
     error_exit "show-desktop.sh not found in $SCRIPT_DIR"
 fi
 
-if [ ! -f "$SCRIPT_DIR/show-desktop-advanced.sh" ]; then
-    error_exit "show-desktop-advanced.sh not found in $SCRIPT_DIR"
-fi
-
-# Check if scripts are readable
-if [ ! -r "$SCRIPT_DIR/show-desktop.sh" ] || [ ! -r "$SCRIPT_DIR/show-desktop-advanced.sh" ]; then
-    error_exit "Cannot read script files. Check file permissions."
+# Check if script is readable
+if [ ! -r "$SCRIPT_DIR/show-desktop.sh" ]; then
+    error_exit "Cannot read script file. Check file permissions."
 fi
 
 # Set installation directory
@@ -103,48 +99,12 @@ if [ ! -w "$INSTALL_DIR" ]; then
     error_exit "Installation directory is not writable: $INSTALL_DIR"
 fi
 
-# Ask user which version to install
-echo -e "${BOLD}Which version would you like to install?${NC}"
 echo ""
-echo "  ${CYAN}1)${NC} Simple version (default)"
-echo "     - Fast and lightweight"
-echo "     - Floating windows: preserves position & size"
-echo "     - Tiled windows: re-tiles according to workspace layout"
-echo ""
-echo "  ${CYAN}2)${NC} Advanced version"
-echo "     - Preserves exact positions and sizes for ALL windows"
-echo "     - Floating windows: exact position & size preserved"
-echo "     - Tiled windows: position & size preserved (may need layout adjustment)"
-echo "     - More complex, slightly slower"
-echo ""
-echo -n "Enter choice [1-2] (default: 1): "
-read -r VERSION_CHOICE
+info "Installing show-desktop script..."
 
-# Default to simple if empty
-VERSION_CHOICE=${VERSION_CHOICE:-1}
-
-case "$VERSION_CHOICE" in
-    1)
-        SCRIPT_NAME="show-desktop.sh"
-        VERSION_TYPE="Simple"
-        ;;
-    2)
-        SCRIPT_NAME="show-desktop-advanced.sh"
-        VERSION_TYPE="Advanced"
-        ;;
-    *)
-        warning "Invalid choice. Installing simple version by default."
-        SCRIPT_NAME="show-desktop.sh"
-        VERSION_TYPE="Simple"
-        ;;
-esac
-
-echo ""
-info "Installing ${VERSION_TYPE} version..."
-
-# Copy selected script
-if ! cp "$SCRIPT_DIR/$SCRIPT_NAME" "$INSTALL_DIR/show-desktop.sh" 2>/dev/null; then
-    error_exit "Failed to copy $SCRIPT_NAME to $INSTALL_DIR"
+# Copy script
+if ! cp "$SCRIPT_DIR/show-desktop.sh" "$INSTALL_DIR/show-desktop.sh" 2>/dev/null; then
+    error_exit "Failed to copy show-desktop.sh to $INSTALL_DIR"
 fi
 
 # Make script executable
@@ -161,7 +121,7 @@ if [ ! -x "$INSTALL_DIR/show-desktop.sh" ]; then
     error_exit "Verification failed: show-desktop.sh is not executable"
 fi
 
-success "Script ($VERSION_TYPE version) installed to $INSTALL_DIR"
+success "Script installed to $INSTALL_DIR"
 echo ""
 
 # Check dependencies
@@ -225,9 +185,5 @@ echo ""
 echo "4. Test it by pressing your configured keybind (default: Super + D)"
 echo ""
 
-if [ "$VERSION_TYPE" = "Advanced" ]; then
-    info "Note: The Advanced version preserves exact window positions and sizes."
-    info "      For best results, ensure your workspace layout settings are consistent."
-fi
 
 echo ""
