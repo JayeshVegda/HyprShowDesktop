@@ -16,11 +16,15 @@ if [ -t 1 ]; then
     GREEN='\033[0;32m'
     YELLOW='\033[1;33m'
     RED='\033[0;31m'
+    CYAN='\033[0;36m'
+    BOLD='\033[1m'
     NC='\033[0m' # No Color
 else
     GREEN=''
     YELLOW=''
     RED=''
+    CYAN=''
+    BOLD=''
     NC=''
 fi
 
@@ -36,7 +40,11 @@ error() {
     echo -e "${RED}✗${NC} $1"
 }
 
-echo "Installing Hyprland Show Desktop..."
+info() {
+    echo -e "${CYAN}ℹ${NC} $1"
+}
+
+echo -e "${BOLD}Installing Hyprland Show Desktop...${NC}"
 echo ""
 
 # Get script directory
@@ -47,14 +55,18 @@ if [ ! -d "$SCRIPT_DIR" ]; then
     error_exit "Cannot determine script directory."
 fi
 
-# Check if show-desktop.sh exists in script directory
+# Check if scripts exist
 if [ ! -f "$SCRIPT_DIR/show-desktop.sh" ]; then
     error_exit "show-desktop.sh not found in $SCRIPT_DIR"
 fi
 
-# Check if show-desktop.sh is readable
-if [ ! -r "$SCRIPT_DIR/show-desktop.sh" ]; then
-    error_exit "Cannot read show-desktop.sh. Check file permissions."
+if [ ! -f "$SCRIPT_DIR/show-desktop-advanced.sh" ]; then
+    error_exit "show-desktop-advanced.sh not found in $SCRIPT_DIR"
+fi
+
+# Check if scripts are readable
+if [ ! -r "$SCRIPT_DIR/show-desktop.sh" ] || [ ! -r "$SCRIPT_DIR/show-desktop-advanced.sh" ]; then
+    error_exit "Cannot read script files. Check file permissions."
 fi
 
 # Set installation directory
@@ -91,9 +103,48 @@ if [ ! -w "$INSTALL_DIR" ]; then
     error_exit "Installation directory is not writable: $INSTALL_DIR"
 fi
 
-# Copy script with error handling
-if ! cp "$SCRIPT_DIR/show-desktop.sh" "$INSTALL_DIR/" 2>/dev/null; then
-    error_exit "Failed to copy show-desktop.sh to $INSTALL_DIR"
+# Ask user which version to install
+echo -e "${BOLD}Which version would you like to install?${NC}"
+echo ""
+echo "  ${CYAN}1)${NC} Simple version (default)"
+echo "     - Fast and lightweight"
+echo "     - Floating windows: preserves position & size"
+echo "     - Tiled windows: re-tiles according to workspace layout"
+echo ""
+echo "  ${CYAN}2)${NC} Advanced version"
+echo "     - Preserves exact positions and sizes for ALL windows"
+echo "     - Floating windows: exact position & size preserved"
+echo "     - Tiled windows: position & size preserved (may need layout adjustment)"
+echo "     - More complex, slightly slower"
+echo ""
+echo -n "Enter choice [1-2] (default: 1): "
+read -r VERSION_CHOICE
+
+# Default to simple if empty
+VERSION_CHOICE=${VERSION_CHOICE:-1}
+
+case "$VERSION_CHOICE" in
+    1)
+        SCRIPT_NAME="show-desktop.sh"
+        VERSION_TYPE="Simple"
+        ;;
+    2)
+        SCRIPT_NAME="show-desktop-advanced.sh"
+        VERSION_TYPE="Advanced"
+        ;;
+    *)
+        warning "Invalid choice. Installing simple version by default."
+        SCRIPT_NAME="show-desktop.sh"
+        VERSION_TYPE="Simple"
+        ;;
+esac
+
+echo ""
+info "Installing ${VERSION_TYPE} version..."
+
+# Copy selected script
+if ! cp "$SCRIPT_DIR/$SCRIPT_NAME" "$INSTALL_DIR/show-desktop.sh" 2>/dev/null; then
+    error_exit "Failed to copy $SCRIPT_NAME to $INSTALL_DIR"
 fi
 
 # Make script executable
@@ -110,7 +161,7 @@ if [ ! -x "$INSTALL_DIR/show-desktop.sh" ]; then
     error_exit "Verification failed: show-desktop.sh is not executable"
 fi
 
-success "Script installed to $INSTALL_DIR"
+success "Script ($VERSION_TYPE version) installed to $INSTALL_DIR"
 echo ""
 
 # Check dependencies
@@ -159,7 +210,7 @@ else
 fi
 
 echo ""
-echo "Installation complete!"
+echo -e "${BOLD}Installation complete!${NC}"
 echo ""
 echo "Next steps:"
 echo "1. Add this keybind to your hyprland.conf (or modules/bind.conf):"
@@ -172,4 +223,11 @@ echo "3. Reload your config:"
 echo "   ${GREEN}hyprctl reload${NC}"
 echo ""
 echo "4. Test it by pressing your configured keybind (default: Super + D)"
+echo ""
+
+if [ "$VERSION_TYPE" = "Advanced" ]; then
+    info "Note: The Advanced version preserves exact window positions and sizes."
+    info "      For best results, ensure your workspace layout settings are consistent."
+fi
+
 echo ""

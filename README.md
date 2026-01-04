@@ -9,6 +9,22 @@ A simple script for [Hyprland](https://hyprland.org/) that provides a "Show Desk
 - ✅ Works with any number of windows
 - ✅ Lightweight and fast
 - ✅ No dependencies beyond `jq` (which comes with most Linux distributions)
+- ✅ **Two versions available**: Simple and Advanced (choose during installation)
+
+## Version Comparison
+
+### Simple Version (Default)
+- **Fast and lightweight** - Minimal overhead
+- **Floating windows**: Preserves exact position & size ✅
+- **Tiled windows**: Re-tiles according to workspace layout (position not preserved)
+- **Best for**: Most users who want quick desktop access
+
+### Advanced Version
+- **Preserves exact positions and sizes** for ALL windows
+- **Floating windows**: Exact position & size preserved ✅
+- **Tiled windows**: Position & size preserved (may need layout adjustment)
+- **Slightly slower**: More complex state management
+- **Best for**: Users who need exact window restoration, especially with custom layouts
 
 ## Requirements
 
@@ -18,7 +34,7 @@ A simple script for [Hyprland](https://hyprland.org/) that provides a "Show Desk
 
 ## Installation
 
-### Method 1: Manual Installation
+### Method 1: Installation Script (Recommended)
 
 1. Clone or download this repository:
 ```bash
@@ -26,20 +42,43 @@ git clone https://github.com/JayeshVegda/HyprShowDesktop.git
 cd HyprShowDesktop
 ```
 
-2. Copy the script to your Hyprland config directory:
+2. Run the installation script:
+```bash
+./install.sh
+```
+
+3. Choose which version to install:
+   - **Option 1**: Simple version (default) - Fast, floating windows preserve position/size
+   - **Option 2**: Advanced version - Preserves exact positions/sizes for all windows
+
+4. Follow the on-screen instructions to add the keybind and workspace rule to your config
+
+### Method 2: Manual Installation
+
+1. Clone or download this repository:
+```bash
+git clone https://github.com/JayeshVegda/HyprShowDesktop.git
+cd HyprShowDesktop
+```
+
+2. Choose which script to copy:
+   - **Simple version**: `show-desktop.sh`
+   - **Advanced version**: `show-desktop-advanced.sh`
+
+3. Copy the chosen script to your Hyprland config directory:
 ```bash
 mkdir -p ~/.config/hypr/hyprland-show-desktop
-cp show-desktop.sh ~/.config/hypr/hyprland-show-desktop/
+cp show-desktop.sh ~/.config/hypr/hyprland-show-desktop/  # or show-desktop-advanced.sh
 chmod +x ~/.config/hypr/hyprland-show-desktop/show-desktop.sh
 ```
 
-3. Add the keybind to your `hyprland.conf`:
+4. Add the keybind to your `hyprland.conf`:
 ```ini
 # Show Desktop
 bind = $mainMod, D, exec, ~/.config/hypr/hyprland-show-desktop/show-desktop.sh
 ```
 
-4. Add workspace rule for the special workspace (add to your config, e.g., in `animations.conf` or `general.conf`):
+5. Add workspace rule for the special workspace (add to your config, e.g., in `animations.conf` or `general.conf`):
 ```ini
 # Special workspace for show desktop functionality
 workspace = special:desktop, gapsout:0, gapsin:0, bordersize:0
@@ -88,6 +127,27 @@ The script:
 2. When hiding: Moves all windows to a special workspace (`special:desktop`) and stores their addresses
 3. When showing: Restores windows from the special workspace back to their original workspace using stored addresses
 4. Uses `XDG_RUNTIME_DIR` for temporary state files (falls back to `/tmp` if not set)
+
+## FAQ
+
+### Does it maintain exact position and size of all windows?
+
+**Simple Version:**
+- ✅ **Floating windows**: Yes, exact position and size are preserved
+- ⚠️ **Tiled windows**: Position is not preserved - windows are re-tiled according to the workspace layout
+
+**Advanced Version:**
+- ✅ **Floating windows**: Yes, exact position and size are preserved
+- ✅ **Tiled windows**: Position and size are preserved (exact pixel positions restored)
+
+### Which version should I choose?
+
+- **Choose Simple version** if you want fast, lightweight functionality and don't need exact tiled window positions
+- **Choose Advanced version** if you need exact window positions/sizes preserved for all windows, especially with custom layouts
+
+### Can I switch versions after installation?
+
+Yes! Simply run `./install.sh` again and choose a different version, or manually copy the desired script file.
 
 ## Troubleshooting
 
